@@ -596,7 +596,18 @@ async function saveProfileToSupabase(member){
     since: member.since,
     avatar: member.av
   };
-  const { error } = await sb.from('profiles').insert(payload);
+
+  let { error } = await sb.from('profiles').insert(payload);
+  if(!error) return;
+
+  // Backward compatibility: some deployed schemas may still miss optional columns.
+  const msg = String(error.message || '');
+  const missingCol = msg.match(/Could not find the '([^']+)' column/i)?.[1];
+  if(!missingCol || !(missingCol in payload)) throw error;
+
+  const fallbackPayload = { ...payload };
+  delete fallbackPayload[missingCol];
+  ({ error } = await sb.from('profiles').insert(fallbackPayload));
   if(error) throw error;
 }
 
